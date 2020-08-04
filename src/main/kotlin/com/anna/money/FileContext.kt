@@ -97,7 +97,9 @@ data class FileContext(
     companion object {
         val defaultTypeMappings = mapOf<KClassifier, PythonTypeMapping>(
             Int::class to PythonTypeMapping(typeName = "int"),
-            String::class to PythonTypeMapping(typeName = "str")
+            String::class to PythonTypeMapping(typeName = "str"),
+            Float::class to PythonTypeMapping(typeName = "float"),
+            Boolean::class to PythonTypeMapping(typeName = "bool")
         )
     }
 }
