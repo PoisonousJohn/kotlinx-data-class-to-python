@@ -6,3 +6,4 @@ Simple code generator to convert kotlin data classes to python
 Support more types
 - [ ] DateTime (ideally via long type)
 - [ ] Enums
+- [ ] Generic Lists

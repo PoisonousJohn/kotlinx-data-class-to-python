@@ -11,12 +11,3 @@ fun KClass<*>.getNestedSerializableClasses() =
     members.filterIsInstance<KProperty<*>>()
         .map { it.returnType.classifier as KClass<*> }
         .filter { it.isSerializable() }
-
-fun KClass<*>.toImportString() =
-    qualifiedName!!.split(".").toMutableList().run {
-        set(size - 1, getSnakeCaseName(get(size - 1)))
-        joinToString(".")
-    }.let { packageImport ->
-        "from $packageImport import $simpleName"
-    }
-
