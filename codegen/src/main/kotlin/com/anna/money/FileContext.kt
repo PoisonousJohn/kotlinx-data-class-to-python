@@ -1,19 +1,14 @@
 package com.anna.money
 
+import com.anna.money.PythonLangHelpers.Companion.indentBy
+import com.google.common.annotations.VisibleForTesting
 import kotlinx.serialization.SerialName
 import javax.lang.model.element.Element
 import javax.lang.model.element.TypeElement
 import kotlin.reflect.KProperty
 
-data class PythonImport(
-    val packageName: String,
-    val typeName: String
-)
-
 data class FileContext(
     val classElement: TypeElement,
-    val path: String,
-    val nestedClasses: List<TypeElement>,
     val typeConverters: List<TypeConverter> = defaultTypeConverters
 ) {
     private val output = StringBuilder()
@@ -23,12 +18,12 @@ data class FileContext(
 
         output.append(getDefaultImports())
         for (pythonImport in getCustomImports()) {
-            output.append("from ${pythonImport.packageName} import ${pythonImport.typeName}\n")
+            output.append(pythonImport.toImportString())
         }
         output.append(getClassHeader(classElement.simpleName.toString()))
         output.append(generateProperties())
         output.append("\n")
-//        generateValidation()
+        generateValidation()
 
         return output.toString()
     }
@@ -50,16 +45,11 @@ data class FileContext(
     private fun getCustomImports() =
         classElement.getFields()
             .flatMap { field ->
-                typeConverters
-                    .filter { it.isTypeSupported(field) }
-                    .flatMap { it.getCustomImports(field) }
+                getTypeConverter(field).getCustomImports(field)
             }
 
     private fun getPythonTypeDeclaration(property: Element) =
-        typeConverters.firstOrNull {
-            it.isTypeSupported(property)
-        }?.getPythonTypeDeclaration(property)
-            ?: throw IllegalArgumentException("Property ${property.simpleName} with type ${property.asType()} is not supported")
+        getTypeConverter(property).getPythonTypeDeclaration(property)
 
     private fun generateProperties() =
         StringBuilder().apply {
@@ -81,22 +71,43 @@ data class FileContext(
         }
         val properties = classElement.getFields()
         for (property in properties) {
-            withIndentLevel(2) {
-                append(
-                    "if not isinstance(self.${property.getSerializedName()}, ${getPythonTypeDeclaration(
-                        property
-                    )}):\n"
-                )
-            }
-            withIndentLevel(3) {
-                append(
-                    "raise RuntimeError(f'${classElement.simpleName}.${property.getSerializedName()} value {self.${property.getSerializedName()}} should be of type ${getPythonTypeDeclaration(
-                        property
-                    )}')\n"
-                )
-            }
+            val validationString = getTypeConverter(property)
+                .getValidationString("self.${property.getSerializedName()}", property)
+            output.append(
+                validationString.indentBy(2)
+            )
+            output.append("\n")
         }
     }
+
+    @VisibleForTesting
+    private fun packageToModuleDirs(pkg: String): Set<String> {
+        fun Iterable<String>.toModuleDir() = joinToString("/")
+        val output = mutableSetOf<String>()
+        val packageComponents = pkg.split(".").toMutableList()
+        // usually, final python package's part points to the file, and needs no directory
+        // thus we should remove it
+        packageComponents.removeAt(packageComponents.size - 1)
+        while (packageComponents.isNotEmpty()) {
+            output.add(packageComponents.toModuleDir())
+            packageComponents.removeAt(packageComponents.size - 1)
+        }
+        return output
+    }
+
+    fun getModuleDirs() =
+        packageToModuleDirs(classElement.getPackage()).toMutableSet().also { moduleFiles ->
+            getTypeConverter(classElement).getCustomImports(classElement)
+                .map {
+                    packageToModuleDirs(it.packageName)
+                }.forEach {
+                    moduleFiles.addAll(it)
+                }
+        }
+
+    private fun getTypeConverter(type: Element) =
+        typeConverters.firstOrNull { it.isTypeSupported(type) }
+            ?: throw IllegalArgumentException("Type $type is not supported")
 
     companion object {
         val defaultTypeConverters = listOf(
@@ -106,8 +117,3 @@ data class FileContext(
         )
     }
 }
-
-data class PythonTypeMapping(
-    val typeName: String,
-    val import: String = ""
-)

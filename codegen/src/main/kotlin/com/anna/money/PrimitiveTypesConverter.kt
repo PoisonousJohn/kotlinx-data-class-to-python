@@ -11,6 +11,9 @@ class PrimitiveTypesConverter : TypeConverter {
             else -> false
         }
 
+    override fun getValidationString(valueGetter: String, type: Element) =
+        PythonLangHelpers.validateType(valueGetter, getPythonTypeDeclaration(type))
+
     override fun getPythonTypeDeclaration(type: Element): String {
         if (type.asType().toString() == stringQualifier) return "str"
         return defaultTypeMappings[type.asType().kind] ?: throw IllegalArgumentException("${type.asType()} is not supported")
